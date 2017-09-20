@@ -18,7 +18,8 @@ class Parser(object):
         :param text:
         :return:
         '''
-        text = text.encode('utf-8', 'error')
+        if not isinstance(text, str):
+            text = text.encode('utf-8', 'error')
         text = text.decode('string_escape', errors='ignore')
         text = text.decode('utf-8')
         return text
