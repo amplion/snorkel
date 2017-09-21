@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Set & move to home directory
 source set_env.sh
 cd "$SNORKELHOME"
@@ -14,6 +15,9 @@ if [ ! -f "$PARSER" ]; then
         [Nn]* ) ;;
     esac
 fi
+
+# go home for project access
+cd "$HOME$
 
 # Launch jupyter notebook!
 echo "Launching Jupyter Notebook..."
