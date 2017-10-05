@@ -1,4 +1,6 @@
+import logging
 from collections import defaultdict
+
 from snorkel.models import construct_stable_id
 from snorkel.parser import Parser, ParserConnection
 
@@ -9,6 +11,8 @@ try:
     from spacy.deprecated import resolve_model_name
 except:
     raise Exception("spaCy not installed. Use `pip install spacy`.")
+
+logger = logging.getLogger(__name__)
 
 
 class Spacy(Parser):
@@ -43,6 +47,7 @@ class Spacy(Parser):
     CARDINAL	Numerals that do not fall under another type.
 
     '''
+
     def __init__(self, annotators=['tagger', 'parser', 'entity'],
                  lang='en', num_threads=1, verbose=False):
 
@@ -96,7 +101,9 @@ class Spacy(Parser):
         :param text:
         :return:
         '''
-        text = self.to_unicode(text)
+        assert isinstance(text, unicode)
+
+        # text = self.to_unicode(text)
 
         doc = self.model.tokenizer(text)
         for proc in self.pipeline:
@@ -105,45 +112,68 @@ class Spacy(Parser):
 
         position = 0
         for sent in doc.sents:
-            parts = defaultdict(list)
-            text = sent.text
+            try:
+                parts = self.parse_sent(sent, document, position)
+                position += 1
 
-            for i,token in enumerate(sent):
-                parts['words'].append(str(token))
-                parts['lemmas'].append(token.lemma_)
-                parts['pos_tags'].append(token.tag_)
-                parts['ner_tags'].append(token.ent_type_ if token.ent_type_ else 'O')
-                parts['char_offsets'].append(token.idx)
-                parts['abs_char_offsets'].append(token.idx)
-                head_idx = 0 if token.head is token else token.head.i - sent[0].i + 1
-                parts['dep_parents'].append(head_idx)
-                parts['dep_labels'].append(token.dep_)
+                yield parts
+            except Exception as e:
+                print('parse: Failed to parse sentence {}\n{}'.format(position, e))
 
-            # Add null entity array (matching null for CoreNLP)
-            parts['entity_cids'] = ['O' for _ in parts['words']]
-            parts['entity_types'] = ['O' for _ in parts['words']]
+    def parse_sent(self, sent, document, position):
+        parts = defaultdict(list)
+        text = sent.text
 
-            # make char_offsets relative to start of sentence
-            parts['char_offsets'] = [
-                p - parts['char_offsets'][0] for p in parts['char_offsets']
-            ]
-            parts['position'] = position
+        for i, token in enumerate(sent):
+            parts['words'].append(str(token))
+            parts['lemmas'].append(token.lemma_)
+            parts['pos_tags'].append(token.tag_)
+            parts['ner_tags'].append(token.ent_type_ if token.ent_type_ else 'O')
+            parts['char_offsets'].append(token.idx)
+            parts['abs_char_offsets'].append(token.idx)
+            head_idx = 0 if token.head is token else token.head.i - sent[0].i + 1
+            parts['dep_parents'].append(head_idx)
+            parts['dep_labels'].append(token.dep_)
 
-            # Link the sentence to its parent document object
-            parts['document'] = document
-            parts['text'] = text
+        # make char_offsets relative to start of sentence
+        parts['char_offsets'] = [
+            p - parts['char_offsets'][0] for p in parts['char_offsets']
+        ]
+        parts['position'] = position
 
-            # Add null entity array (matching null for CoreNLP)
-            parts['entity_cids'] = ['O' for _ in parts['words']]
-            parts['entity_types'] = ['O' for _ in parts['words']]
+        # Link the sentence to its parent document object
+        parts['document'] = document
+        parts['text'] = text
 
-            # Assign the stable id as document's stable id plus absolute
-            # character offset
-            abs_sent_offset = parts['abs_char_offsets'][0]
-            abs_sent_offset_end = abs_sent_offset + parts['char_offsets'][-1] + len(parts['words'][-1])
-            if document:
-                parts['stable_id'] = construct_stable_id(document, 'sentence', abs_sent_offset, abs_sent_offset_end)
+        # Add null entity array (matching null for CoreNLP)
+        self.update_entity_attributes(parts, sent, document, text)
 
-            position += 1
+        # Assign the stable id as document's stable id plus absolute
+        # character offset
+        abs_sent_offset = parts['abs_char_offsets'][0]
+        abs_sent_offset_end = abs_sent_offset + parts['char_offsets'][-1] + len(parts['words'][-1])
+        if document:
+            parts['stable_id'] = construct_stable_id(document, 'sentence', abs_sent_offset, abs_sent_offset_end)
 
-            yield parts
+        return parts
+
+    def update_entity_attributes(self, parts, sent, document, text):
+        parts['entity_cids'] = ['O' for _ in parts['words']]
+        parts['entity_types'] = ['O' for _ in parts['words']]
+
+
+class SpacyPretagged(Spacy):
+    def update_entity_attributes(self, parts, sent, document, text):
+        super(SpacyPretagged, self).update_entity_attributes(parts, sent, document, text)
+        # Determine where hits occur in sentence
+        hits = [x for x in document.meta['hit_starts'] if sent.start_char <= x <= sent.end_char]
+        for hit in hits:
+            # retrieve the index value
+            try:
+                index = [i for i, x in enumerate(parts['abs_char_offsets'])
+                         if hit <= x <= document.meta['hit_starts']][0]
+                # index = parts['abs_char_offsets'].index(hit)
+                parts['entity_types'][index] = 'target_syn'
+                parts['entity_cids'][index] = document.meta['bmb_id']
+            except IndexError:
+                raise IndexError('SpacyPretagged: hit location does not align in tokens')
