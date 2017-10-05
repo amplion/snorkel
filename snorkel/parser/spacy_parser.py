@@ -173,7 +173,7 @@ class SpacyPretagged(Spacy):
                 index = [i for i, x in enumerate(parts['abs_char_offsets'])
                          if hit <= x <= document.meta['hit_starts']][0]
                 # index = parts['abs_char_offsets'].index(hit)
-                parts['entity_types'][index] = 'target_syn'
+                parts['entity_types'][index] = 'hit'
                 parts['entity_cids'][index] = document.meta['bmb_id']
             except IndexError:
                 raise IndexError('SpacyPretagged: hit location does not align in tokens')
