@@ -17,8 +17,8 @@ if [ ! -f "$PARSER" ]; then
 fi
 
 # go home for project access
-cd "$HOME$"
+cd "$HOME"
 
 # Launch jupyter notebook!
 echo "Launching Jupyter Notebook..."
-jupyter notebook
+jupyter notebook --certfile=~/certs/mycert.pem --keyfile ~/certs/mycert.key
