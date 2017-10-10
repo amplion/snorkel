@@ -118,9 +118,9 @@ class Spacy(Parser):
 
                 yield parts
             except Exception as e:
-                print('parse: Failed to parse sentence {}\n{}'.format(position, e))
+                logger.warn('parse: Failed to parse sentence {}\n{}'.format(position, e))
 
-    def parse_sent(self, sent, document, position):
+    def parse_sent(self, sent, document, position, **kwargs):
         parts = defaultdict(list)
         text = sent.text
 
@@ -146,7 +146,7 @@ class Spacy(Parser):
         parts['text'] = text
 
         # Add null entity array (matching null for CoreNLP)
-        self.update_entity_attributes(parts, sent, document, text)
+        self.update_entity_attributes(parts, sent, document, text, **kwargs)
 
         # Assign the stable id as document's stable id plus absolute
         # character offset
@@ -157,7 +157,7 @@ class Spacy(Parser):
 
         return parts
 
-    def update_entity_attributes(self, parts, sent, document, text):
+    def update_entity_attributes(self, parts, sent, document, text, **kwargs):
         parts['entity_cids'] = ['O' for _ in parts['words']]
         parts['entity_types'] = ['O' for _ in parts['words']]
 
@@ -174,6 +174,7 @@ class SpacyPretagged(Spacy):
                          if hit <= x <= document.meta['hit_starts']][0]
                 # index = parts['abs_char_offsets'].index(hit)
                 parts['entity_types'][index] = 'hit'
-                parts['entity_cids'][index] = document.meta['bmb_id']
+                parts['entity_cids'][index] = str(document.meta['bmb_id'])
+                assert parts['words'][index] == 'BmBTarget'
             except IndexError:
                 raise IndexError('SpacyPretagged: hit location does not align in tokens')
