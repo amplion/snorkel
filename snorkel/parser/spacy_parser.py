@@ -160,21 +160,3 @@ class Spacy(Parser):
     def update_entity_attributes(self, parts, sent, document, text, **kwargs):
         parts['entity_cids'] = ['O' for _ in parts['words']]
         parts['entity_types'] = ['O' for _ in parts['words']]
-
-
-class SpacyPretagged(Spacy):
-    def update_entity_attributes(self, parts, sent, document, text):
-        super(SpacyPretagged, self).update_entity_attributes(parts, sent, document, text)
-        # Determine where hits occur in sentence
-        hits = [x for x in document.meta['hit_starts'] if sent.start_char <= x <= sent.end_char]
-        for hit in hits:
-            # retrieve the index value
-            try:
-                index = [i for i, x in enumerate(parts['abs_char_offsets'])
-                         if hit <= x <= document.meta['hit_starts']][0]
-                # index = parts['abs_char_offsets'].index(hit)
-                parts['entity_types'][index] = 'hit'
-                parts['entity_cids'][index] = str(document.meta['bmb_id'])
-                assert parts['words'][index] == 'BmBTarget'
-            except IndexError:
-                raise IndexError('SpacyPretagged: hit location does not align in tokens')
